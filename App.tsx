@@ -173,6 +173,52 @@ const App: React.FC = () => {
     window.location.reload();
   };
 
+  // --- Backup Logic ---
+  const handleExportBackup = () => {
+    const backupData = {
+      version: 1,
+      timestamp: new Date().toISOString(),
+      settings,
+      payments
+    };
+    
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", `pagotrack_backup_${toISODate(new Date())}.json`);
+    document.body.appendChild(downloadAnchorNode); // required for firefox
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  };
+
+  const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        
+        // Basic validation
+        if (json.payments && Array.isArray(json.payments)) {
+            setPayments(json.payments);
+        }
+        if (json.settings && typeof json.settings === 'object') {
+            setSettings(json.settings);
+        }
+        
+        alert("Copia de seguridad restaurada correctamente.");
+      } catch (err) {
+        console.error(err);
+        alert("Error al leer el archivo. Asegúrate de que sea un archivo de respaldo válido (.json).");
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so same file can be selected again if needed
+    e.target.value = '';
+  };
+
   const handleDownloadMonthlyPDF = () => {
       generateMonthlyReport(currentDate, payments, settings);
   };
@@ -357,6 +403,8 @@ const App: React.FC = () => {
         settings={settings}
         onSave={handleSaveSettings}
         onReset={handleResetApp}
+        onExport={handleExportBackup}
+        onImport={handleImportBackup}
       />
     </div>
   );

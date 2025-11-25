@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Save, Calendar, User, DollarSign, Clock, AlertTriangle, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Save, Calendar, User, DollarSign, Clock, AlertTriangle, RotateCcw, Download, Upload, Database } from 'lucide-react';
 import { EmployeeSettings } from '../types';
 
 interface SettingsModalProps {
@@ -8,10 +8,21 @@ interface SettingsModalProps {
   settings: EmployeeSettings;
   onSave: (newSettings: EmployeeSettings) => void;
   onReset?: () => void;
+  onExport?: () => void;
+  onImport?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onSave, onReset }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  settings, 
+  onSave, 
+  onReset,
+  onExport,
+  onImport 
+}) => {
   const [formData, setFormData] = useState<EmployeeSettings>(settings);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setFormData(settings);
@@ -50,9 +61,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in transition-colors duration-300">
-        <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-850">
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white">Configuración de Empleado</h3>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in transition-colors duration-300 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 sticky top-0 z-10">
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white">Configuración</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition">
             <X size={20} />
           </button>
@@ -130,6 +141,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
                 Guardar Configuración
             </button>
           </div>
+
+           {/* Backup Section */}
+           {(onExport || onImport) && (
+            <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+               <h4 className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1">
+                  <Database size={12} /> Copia de Seguridad
+               </h4>
+               <div className="flex gap-3">
+                  {onExport && (
+                    <button
+                        type="button"
+                        onClick={onExport}
+                        className="flex-1 py-2 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                        <Download size={16} />
+                        Descargar
+                    </button>
+                  )}
+                  {onImport && (
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex-1 py-2 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Upload size={16} />
+                            Cargar
+                        </button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={onImport}
+                            accept=".json"
+                            className="hidden"
+                        />
+                    </>
+                  )}
+               </div>
+               <p className="text-[10px] text-slate-400 mt-2 text-center">
+                  Descarga tus datos para no perderlos en futuras actualizaciones.
+               </p>
+            </div>
+          )}
 
           {/* Danger Zone */}
           <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
