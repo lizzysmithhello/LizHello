@@ -61,12 +61,12 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ currentDate, pay
         
         {/* Alerts Section */}
         {missedDates.length > 0 && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm animate-pulse-slow">
+            <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm animate-pulse-slow">
                 <div className="flex items-start">
                     <AlertTriangle className="text-red-500 mt-0.5 mr-3 flex-shrink-0" size={20} />
                     <div>
-                        <h4 className="text-red-800 font-bold">Atención: Pagos Pendientes</h4>
-                        <p className="text-red-700 text-sm mt-1">
+                        <h4 className="text-red-800 dark:text-red-300 font-bold">Atención: Pagos Pendientes</h4>
+                        <p className="text-red-700 dark:text-red-400 text-sm mt-1">
                             Se detectaron {missedDates.length} días de pago omitidos este mes.
                             <br />
                             <span className="text-xs opacity-75">Fechas: {missedDates.join(', ')}</span>
@@ -78,17 +78,17 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ currentDate, pay
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-between">
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col justify-between transition-colors">
                 <div className="flex justify-between items-start mb-2">
                     <div>
-                        <p className="text-slate-500 text-sm font-medium">Total Pagado (Mes)</p>
-                        <h3 className="text-2xl font-bold text-slate-800">${totalPaid.toLocaleString()}</h3>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Pagado (Mes)</p>
+                        <h3 className="text-2xl font-bold text-slate-800 dark:text-white">${totalPaid.toLocaleString()}</h3>
                     </div>
-                    <div className="p-2 bg-green-100 text-green-600 rounded-lg">
+                    <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg">
                         <DollarSignIcon />
                     </div>
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2">
+                <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 mt-2">
                     <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${progress}%` }}></div>
                 </div>
                 <p className="text-xs text-slate-400 mt-2 text-right">
@@ -96,56 +96,56 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ currentDate, pay
                 </p>
             </div>
 
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
                 <div className="flex justify-between items-start mb-2">
                      <div>
-                        <p className="text-slate-500 text-sm font-medium">Último Pago</p>
-                        <h3 className="text-lg font-bold text-slate-800">
+                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Último Pago</p>
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-white">
                             {payments.length > 0 
                                 ? new Date(payments[payments.length - 1].date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short'}) 
                                 : 'Sin registros'}
                         </h3>
                      </div>
-                     <div className="p-2 bg-red-100 text-[#C1272D] rounded-lg">
+                     <div className="p-2 bg-red-100 dark:bg-red-900/30 text-[#C1272D] dark:text-red-400 rounded-lg">
                         <CheckCheck size={20} />
                      </div>
                 </div>
-                <p className="text-xs text-slate-500 mt-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
                     {payments.length > 0 ? `Monto: $${payments[payments.length - 1].amount}` : '-'}
                 </p>
             </div>
 
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
                 <div className="flex justify-between items-start mb-2">
                      <div>
-                        <p className="text-slate-500 text-sm font-medium">Próximo Pago</p>
-                        <h3 className="text-lg font-bold text-slate-800">
+                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Próximo Pago</p>
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-white">
                            {/* Simple logic for next payment day */}
                            {getNextPaymentDate(settings.weeklyPaymentDay)}
                         </h3>
                      </div>
-                     <div className="p-2 bg-orange-100 text-orange-600 rounded-lg">
+                     <div className="p-2 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg">
                         <Calendar size={20} />
                      </div>
                 </div>
-                <p className="text-xs text-slate-500 mt-2">Pago semanal configurado</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">Pago semanal configurado</p>
             </div>
         </div>
 
         {/* Chart */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-            <h4 className="text-slate-800 font-semibold mb-6 flex items-center gap-2">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
+            <h4 className="text-slate-800 dark:text-white font-semibold mb-6 flex items-center gap-2">
                 <TrendingUp size={18} className="text-slate-400" />
                 Historial de Pagos
             </h4>
             <div className="h-48 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:opacity-10" />
                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} dy={10} />
                         <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
                         <Tooltip 
-                            cursor={{fill: '#f8fafc'}}
+                            cursor={{fill: 'transparent'}}
                             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                         />
                         <Bar dataKey="total" fill="#C1272D" radius={[4, 4, 0, 0]} barSize={40} />

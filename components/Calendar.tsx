@@ -31,18 +31,18 @@ export const Calendar: React.FC<CalendarProps> = ({ currentDate, payments, onSel
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors duration-300">
+      <div className="grid grid-cols-7 bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-700">
         {WEEKDAYS.map(day => (
-          <div key={day} className="py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <div key={day} className="py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             {day}
           </div>
         ))}
       </div>
       
-      <div className="grid grid-cols-7 auto-rows-fr">
+      <div className="grid grid-cols-7 auto-rows-fr bg-white dark:bg-slate-800">
         {emptySlots.map((_, i) => (
-          <div key={`empty-${i}`} className="h-24 md:h-32 bg-slate-50/50 border-b border-r border-slate-100 last:border-r-0" />
+          <div key={`empty-${i}`} className="h-24 md:h-32 bg-slate-50/50 dark:bg-slate-800/50 border-b border-r border-slate-100 dark:border-slate-700 last:border-r-0" />
         ))}
 
         {days.map((date) => {
@@ -56,14 +56,14 @@ export const Calendar: React.FC<CalendarProps> = ({ currentDate, payments, onSel
               key={dateStr}
               onClick={() => onSelectDate(dateStr)}
               className={`
-                h-24 md:h-32 p-2 border-b border-r border-slate-100 relative cursor-pointer transition-colors hover:bg-slate-50
-                ${isToday ? 'bg-red-50/40' : ''}
+                h-24 md:h-32 p-2 border-b border-r border-slate-100 dark:border-slate-700 relative cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-750
+                ${isToday ? 'bg-red-50/40 dark:bg-red-900/10' : ''}
               `}
             >
               <div className="flex justify-between items-start">
                 <span className={`
                   text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full
-                  ${isToday ? 'bg-[#C1272D] text-white' : 'text-slate-700'}
+                  ${isToday ? 'bg-[#C1272D] text-white' : 'text-slate-700 dark:text-slate-300'}
                 `}>
                   {date.getDate()}
                 </span>
@@ -76,7 +76,7 @@ export const Calendar: React.FC<CalendarProps> = ({ currentDate, payments, onSel
               <div className="mt-2 flex flex-col gap-1">
                 {payment ? (
                   <div className="flex flex-col items-start animate-fade-in">
-                     <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-100 px-2 py-1 rounded-md w-full">
+                     <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 px-2 py-1 rounded-md w-full">
                         <CheckCircle size={12} />
                         ${payment.amount.toLocaleString()}
                      </span>
@@ -86,7 +86,7 @@ export const Calendar: React.FC<CalendarProps> = ({ currentDate, payments, onSel
                   </div>
                 ) : (
                   <div className="hidden group-hover:flex justify-center items-center h-full opacity-0 hover:opacity-100 transition-opacity">
-                      <Plus className="text-slate-300" />
+                      <Plus className="text-slate-300 dark:text-slate-600" />
                   </div>
                 )}
               </div>

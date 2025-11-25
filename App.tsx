@@ -6,7 +6,12 @@ import { SettingsModal } from './components/SettingsModal';
 import { Payment, EmployeeSettings } from './types';
 import { getMonthName, toISODate } from './utils/dateUtils';
 import { generateMonthlyReport } from './utils/pdfGenerator';
-import { ChevronLeft, ChevronRight, Settings, User, FileDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings, User, FileDown, Moon, Sun } from 'lucide-react';
+
+// Helper for safe ID generation
+const generateId = () => {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+};
 
 const App: React.FC = () => {
   // --- State ---
@@ -17,6 +22,14 @@ const App: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>(toISODate(new Date()));
   const [editingPayment, setEditingPayment] = useState<Payment | undefined>(undefined);
   
+  // Theme State
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('pagotrack_theme') as 'light' | 'dark' || 'light';
+    }
+    return 'light';
+  });
+
   // Settings with startDate
   const [settings, setSettings] = useState<EmployeeSettings>(() => {
     // Try to load settings from local storage or default
@@ -45,18 +58,21 @@ const App: React.FC = () => {
         console.error("Error parsing saved payments", e);
       }
     } else {
-        // Seed some dummy data for demonstration
-        const today = new Date();
-        const dummy: Payment[] = [
-            { id: '1', date: toISODate(new Date(today.getFullYear(), today.getMonth(), 5)), amount: 2500, note: 'Pago semana 1' },
-            { id: '2', date: toISODate(new Date(today.getFullYear(), today.getMonth(), 12)), amount: 2500, note: 'Pago semana 2' },
-        ];
-        setPayments(dummy);
+        // Seed some dummy data for demonstration if empty
+        // Only if user hasn't explicitly cleared it (we can't easily know that without another flag, 
+        // but let's assume if it's null we seed, if it's [] we don't. localStorage returns null if missing)
+        if (saved === null) {
+            const today = new Date();
+            const dummy: Payment[] = [
+                { id: '1', date: toISODate(new Date(today.getFullYear(), today.getMonth(), 5)), amount: 2500, note: 'Pago semana 1' },
+                { id: '2', date: toISODate(new Date(today.getFullYear(), today.getMonth(), 12)), amount: 2500, note: 'Pago semana 2' },
+            ];
+            setPayments(dummy);
+        }
     }
   }, []);
 
   useEffect(() => {
-    // Save to local storage on change
     localStorage.setItem('pagotrack_payments', JSON.stringify(payments));
   }, [payments]);
 
@@ -64,8 +80,23 @@ const App: React.FC = () => {
     localStorage.setItem('pagotrack_settings', JSON.stringify(settings));
   }, [settings]);
 
+  // Apply theme
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('pagotrack_theme', theme);
+  }, [theme]);
+
   // --- Logic ---
   
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
+
   const handlePrevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   };
@@ -83,20 +114,63 @@ const App: React.FC = () => {
 
   const handleSavePayment = (data: Omit<Payment, 'id'>) => {
     setPayments(prev => {
-      // Remove existing for this date if we are editing or overwriting
-      const filtered = prev.filter(p => p.date !== data.date);
-      const newPayment: Payment = {
-        ...data,
-        id: crypto.randomUUID()
-      };
-      // Keep array sorted by date
-      const newArr = [...filtered, newPayment].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      return newArr;
+      let newPayments = [...prev];
+
+      if (editingPayment) {
+        // EDIT MODE:
+        // 1. Remove the original payment (by ID) so we don't duplicate if the date changed
+        newPayments = newPayments.filter(p => p.id !== editingPayment.id);
+        
+        // 2. Add the updated payment using the SAME ID
+        newPayments.push({
+          ...data,
+          id: editingPayment.id
+        });
+      } else {
+        // NEW MODE:
+        // 1. Remove any existing payment on this target date (Enforce 1 payment per day constraint)
+        newPayments = newPayments.filter(p => p.date !== data.date);
+        
+        // 2. Add new payment with NEW ID
+        newPayments.push({
+          ...data,
+          id: generateId()
+        });
+      }
+
+      // Sort by date
+      return newPayments.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     });
+    setIsModalOpen(false);
+    setEditingPayment(undefined);
+  };
+
+  const handleDeletePayment = (id: string) => {
+    setPayments(prev => prev.filter(p => p.id !== id));
+    setIsModalOpen(false);
+    setEditingPayment(undefined);
   };
 
   const handleSaveSettings = (newSettings: EmployeeSettings) => {
       setSettings(newSettings);
+  };
+
+  const handleResetApp = () => {
+    // Reset Settings to default
+    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+    const defaultSettings = {
+        name: "Juan Pérez",
+        weeklyPaymentDay: 5,
+        expectedAmount: 2500,
+        startDate: toISODate(startOfYear)
+    };
+    
+    // Update Local Storage directly and force reload
+    localStorage.setItem('pagotrack_payments', JSON.stringify([]));
+    localStorage.setItem('pagotrack_settings', JSON.stringify(defaultSettings));
+    
+    alert("Sistema reiniciado a cero correctamente. La página se recargará ahora.");
+    window.location.reload();
   };
 
   const handleDownloadPDF = () => {
@@ -136,31 +210,52 @@ const App: React.FC = () => {
 
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-12">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pb-12 transition-colors duration-300">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30 shadow-sm transition-colors duration-300">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {/* Logo Recreation: CENTRO MEAVE 6 */}
             <div className="flex items-baseline leading-none select-none tracking-tighter">
                 <span className="text-2xl md:text-3xl font-bold text-[#C1272D]">CENTRO</span>
-                <span className="text-2xl md:text-3xl font-light text-black mx-1">MEAVE</span>
+                <span className="text-2xl md:text-3xl font-light text-black dark:text-white mx-1">MEAVE</span>
                 <span className="text-4xl md:text-5xl font-bold text-[#C1272D]">6</span>
             </div>
           </div>
           
           <div className="flex items-center gap-3 md:gap-6">
-             <div className="flex flex-col items-end">
+             <div className="flex flex-col items-end hidden sm:flex">
                 <span className="text-[10px] uppercase text-slate-400 font-semibold tracking-wider">Pagos a</span>
-                <div className="flex items-center gap-2 text-slate-700">
+                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
                     <User size={18} className="text-[#C1272D]" />
                     <span className="font-bold text-lg leading-tight">{settings.name}</span>
                 </div>
              </div>
-             <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
+             
+             {/* Theme Toggle - Slider */}
+             <div
+               onClick={toggleTheme}
+               className={`w-14 h-7 flex items-center bg-slate-200 dark:bg-slate-700 rounded-full p-1 cursor-pointer transition-colors duration-300 border border-slate-300 dark:border-slate-600`}
+               title="Cambiar modo"
+             >
+               <div
+                 className={`bg-white dark:bg-slate-300 w-5 h-5 rounded-full shadow-md transform transition-transform duration-300 flex items-center justify-center ${
+                   theme === 'dark' ? 'translate-x-7' : 'translate-x-0'
+                 }`}
+               >
+                 {theme === 'dark' ? (
+                   <Moon size={12} className="text-slate-800" /> 
+                 ) : (
+                   <Sun size={12} className="text-amber-500" />
+                 )}
+               </div>
+             </div>
+
+             <div className="h-8 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block"></div>
+             
              <button 
                 onClick={() => setIsSettingsOpen(true)}
-                className="text-slate-400 hover:text-[#C1272D] transition p-2 hover:bg-red-50 rounded-full"
+                className="text-slate-400 hover:text-[#C1272D] transition p-2 hover:bg-red-50 dark:hover:bg-slate-700 rounded-full"
                 title="Configuración"
              >
                 <Settings size={22} />
@@ -184,27 +279,27 @@ const App: React.FC = () => {
         {/* Calendar Control */}
         <section className="space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <h2 className="text-2xl font-bold text-slate-800 capitalize">
+                <h2 className="text-2xl font-bold text-slate-800 dark:text-white capitalize transition-colors">
                     {getMonthName(currentDate)}
                 </h2>
                 
                 <div className="flex items-center gap-3">
                     <button 
                         onClick={handleDownloadPDF}
-                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#C1272D] bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#C1272D] bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition-colors"
                     >
                         <FileDown size={18} />
                         <span className="hidden sm:inline">Descargar Reporte</span>
                     </button>
 
-                    <div className="flex items-center gap-2 bg-white rounded-lg p-1 shadow-sm border border-slate-200">
-                        <button onClick={handlePrevMonth} className="p-2 hover:bg-slate-100 rounded-md text-slate-600 transition">
+                    <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-lg p-1 shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
+                        <button onClick={handlePrevMonth} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-400 transition">
                             <ChevronLeft size={20} />
                         </button>
-                        <button onClick={() => setCurrentDate(new Date())} className="text-sm font-medium px-3 text-slate-600 hover:text-[#C1272D]">
+                        <button onClick={() => setCurrentDate(new Date())} className="text-sm font-medium px-3 text-slate-600 dark:text-slate-300 hover:text-[#C1272D]">
                             Hoy
                         </button>
-                        <button onClick={handleNextMonth} className="p-2 hover:bg-slate-100 rounded-md text-slate-600 transition">
+                        <button onClick={handleNextMonth} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-400 transition">
                             <ChevronRight size={20} />
                         </button>
                     </div>
@@ -223,10 +318,12 @@ const App: React.FC = () => {
 
       {/* Payment Entry Modal */}
       <PaymentModal 
+        key={selectedDate} /* Force re-render on date change to ensure fresh state */
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         selectedDate={selectedDate}
         onSave={handleSavePayment}
+        onDelete={handleDeletePayment}
         existingPayment={editingPayment}
       />
 
@@ -236,6 +333,7 @@ const App: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
         onSave={handleSaveSettings}
+        onReset={handleResetApp}
       />
     </div>
   );
