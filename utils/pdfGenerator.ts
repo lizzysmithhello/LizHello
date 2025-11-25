@@ -1,56 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Payment, EmployeeSettings } from '../types';
-import { getMonthName, toISODate, isSameWeek, getWeekNumber } from './dateUtils';
-
-// Helper to draw a simple bar chart
-const drawBarChart = (doc: jsPDF, data: { label: string, value: number }[], startY: number) => {
-    const pageWidth = doc.internal.pageSize.width;
-    const margin = 14;
-    const chartWidth = pageWidth - (margin * 2);
-    const chartHeight = 50;
-    const maxVal = Math.max(...data.map(d => d.value), 1000); // Minimum scale to avoid div/0
-    
-    // Title
-    doc.setFontSize(12);
-    doc.setTextColor(0);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Gráfica Mensual de Pagos Recibidos', margin, startY - 5);
-    
-    // Draw Axis
-    doc.setDrawColor(200);
-    doc.line(margin, startY + chartHeight, margin + chartWidth, startY + chartHeight); // X Axis
-    
-    if (data.length === 0) return;
-
-    const barWidth = (chartWidth / data.length) * 0.6;
-    const gap = (chartWidth / data.length) * 0.4;
-    
-    data.forEach((item, i) => {
-        const x = margin + (i * (barWidth + gap)) + (gap / 2);
-        const barHeight = (item.value / maxVal) * chartHeight;
-        const y = startY + chartHeight - barHeight;
-        
-        // Bar
-        doc.setFillColor(193, 39, 45); // Brand Red
-        doc.rect(x, y, barWidth, barHeight, 'F');
-        
-        // Label (Month)
-        doc.setFontSize(8);
-        doc.setTextColor(100);
-        doc.setFont('helvetica', 'normal');
-        // Only show first 3 letters of month if too crowded
-        const label = data.length > 12 ? item.label.substring(0, 3) : item.label;
-        doc.text(label, x + (barWidth / 2), startY + chartHeight + 5, { align: 'center' });
-        
-        // Value on top
-        if (item.value > 0) {
-            doc.setFontSize(7);
-            doc.setTextColor(0);
-            doc.text(`$${Math.round(item.value)}`, x + (barWidth / 2), y - 2, { align: 'center' });
-        }
-    });
-};
+import { getMonthName } from './dateUtils';
 
 // Helper to generate common PDF structure
 const generatePDF = (
@@ -60,8 +11,7 @@ const generatePDF = (
   total: number,
   settings: EmployeeSettings,
   fileName: string,
-  extraStats?: { expectedTotal: number, monthsWorked: number },
-  chartData?: { label: string, value: number }[]
+  extraStats?: { expectedTotal: number, weeksWorked: number, debt: number }
 ) => {
   const doc = new jsPDF();
   
@@ -93,74 +43,69 @@ const generatePDF = (
   doc.setFontSize(11);
   doc.setTextColor(0);
   doc.setFont('helvetica', 'bold');
-  doc.text('Información General', 14, 50);
+  doc.text('Información del Empleado', 14, 50);
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(80);
 
-  // Column 1
   doc.text(`Nombre:`, 14, 58);
-  doc.text(`Fecha Inicio:`, 14, 64);
-  
   doc.setTextColor(0);
   doc.setFont('helvetica', 'bold');
   doc.text(`${settings.name}`, 40, 58);
-  doc.text(`${settings.startDate}`, 40, 64);
 
-  // --- Financial Balance Section (New) ---
+  // --- Financial Balance Section (Specific Request) ---
   if (extraStats) {
-      const balance = total - extraStats.expectedTotal;
-      const isNegative = balance < 0;
+      const { expectedTotal, weeksWorked, debt } = extraStats;
+      const isNegative = debt > 0; // Debt means they paid LESS than expected
 
       // Box background
       doc.setFillColor(248, 250, 252);
-      doc.roundedRect(100, 45, 96, 35, 2, 2, 'F');
+      doc.roundedRect(100, 45, 96, 45, 2, 2, 'F');
       
       doc.setFontSize(11);
       doc.setTextColor(0);
-      doc.text('Balance Financiero Total', 105, 53);
+      doc.text('Resumen de Sueldos y Deuda', 105, 53);
 
       doc.setFontSize(9);
       doc.setTextColor(80);
+      doc.setFont('helvetica', 'normal');
       
-      // Line 1: Expected
-      doc.text('Debería ser (Meses trabajados):', 105, 60);
-      doc.text(`$${extraStats.expectedTotal.toLocaleString()}`, 190, 60, { align: 'right' });
-      
-      // Line 2: Actual
-      doc.text('Total Recibido (Suma real):', 105, 66);
-      doc.text(`$${total.toLocaleString()}`, 190, 66, { align: 'right' });
+      // Line 1: Weeks Worked (based on notes)
+      doc.text('Semanas Trabajadas (Notas generadas):', 105, 60);
+      doc.text(`${weeksWorked}`, 190, 60, { align: 'right' });
 
-      // Line 3: Balance
+      // Line 2: Expected Amount
+      doc.text(`Monto Esperado (${weeksWorked} x $${settings.expectedAmount}):`, 105, 66);
+      doc.text(`$${expectedTotal.toLocaleString()}`, 190, 66, { align: 'right' });
+      
+      // Line 3: Actual Amount
+      doc.text('Total Pagado Real:', 105, 72);
+      doc.text(`$${total.toLocaleString()}`, 190, 72, { align: 'right' });
+
+      // Line 4: Balance / Debt
       doc.setDrawColor(200);
-      doc.line(105, 70, 190, 70);
+      doc.line(105, 76, 190, 76);
       
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
-      doc.text('Diferencia / Balance:', 105, 76);
+      doc.text('DEUDA ACUMULADA:', 105, 82);
       
-      doc.setTextColor(isNegative ? 220 : 0, isNegative ? 20 : 150, isNegative ? 60 : 0); // Red if negative, Greenish if positive
-      doc.text(`$${balance.toLocaleString()}`, 190, 76, { align: 'right' });
+      // If Debt > 0, it's bad (Red). If Debt <= 0, it's good (Green or Black)
+      doc.setTextColor(isNegative ? 193 : 22, isNegative ? 39 : 163, isNegative ? 45 : 74); 
+      doc.text(`$${debt.toLocaleString()}`, 190, 82, { align: 'right' });
       
       // Reset color
       doc.setTextColor(0);
-  } else {
-      // Fallback for monthly report simple summary
-      doc.text(`Total Pagado:`, 140, 58);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`$${total.toLocaleString()}`, 170, 58);
   }
 
   // --- Table ---
-  // Table Columns
-  // If extraStats exists (Total Report), use detailed columns
+  // If extraStats exists, it's the Total Report
   const tableColumn = extraStats 
-      ? ["Fecha", "Semana", "Detalle / Nota", "Estado", "Monto"]
+      ? ["Fecha", "Nota / Contenido", "Ticket (Imagen)", "Monto Pagado"]
       : ["Fecha", "Detalle / Nota", "Estado", "Monto"];
   
-  // Start position logic
-  const tableStartY = extraStats ? 90 : 75;
+  const tableStartY = extraStats ? 95 : 75;
 
   autoTable(doc, {
     startY: tableStartY,
@@ -175,58 +120,50 @@ const generatePDF = (
     styles: {
       fontSize: 9,
       cellPadding: 3,
-      valign: 'middle'
+      valign: 'middle',
+      minCellHeight: 15 // Ensure space for images
     },
     columnStyles: extraStats ? {
-      0: { cellWidth: 25 }, // Fecha
-      1: { cellWidth: 20, halign: 'center' }, // Semana
-      2: { cellWidth: 'auto' }, // Nota
-      3: { cellWidth: 30, halign: 'center' }, // Estado
-      4: { cellWidth: 30, halign: 'right' } // Monto
+      0: { cellWidth: 30 }, // Fecha
+      1: { cellWidth: 'auto' }, // Nota
+      2: { cellWidth: 30, halign: 'center' }, // Ticket
+      3: { cellWidth: 35, halign: 'right' } // Monto
     } : {
       0: { cellWidth: 30 },
       1: { cellWidth: 'auto' },
       2: { cellWidth: 35 },
       3: { cellWidth: 35, halign: 'right' }
     },
-    didParseCell: function(data) {
-        // Headers grouping style
-        if (data.row.raw.length === 1 && (data.row.raw[0] as any).colSpan) {
-             data.cell.styles.fillColor = [241, 245, 249]; // Slate 100
-             data.cell.styles.textColor = [71, 85, 105]; // Slate 600
-             data.cell.styles.fontStyle = 'bold';
-             data.cell.styles.halign = 'left';
-        }
-        // Style "FALTA DE PAGO" rows
-        else if (data.row.raw[data.row.raw.length - 2] === 'FALTA DE PAGO') {
-             data.cell.styles.textColor = [193, 39, 45];
-             // data.cell.styles.fillColor = [254, 242, 242]; // Light Red bg
-        }
-        // Style "Pagado" state text
-        else if (data.row.raw[data.row.raw.length - 2] === 'Pagado') {
-             if (data.column.index === data.row.raw.length - 2) { // The 'Estado' column
-                 data.cell.styles.textColor = [22, 163, 74]; // Green
-                 data.cell.styles.fontStyle = 'bold';
+    didDrawCell: function(data) {
+        // Embed Image Logic
+        if (extraStats && data.column.index === 2 && data.cell.raw) {
+             const imageStr = data.cell.raw as string;
+             // Check if it looks like a base64 image string
+             if (typeof imageStr === 'string' && imageStr.startsWith('data:image')) {
+                 try {
+                     // Clear the text "Ver Ticket" so we draw the image instead
+                     // (Though autotable draws text before hook, we can draw over it or just ignore if we pass image as data)
+                     // Actually, better to pass the base64 string as cell data, and here we draw the image.
+                     
+                     const dim = data.cell.height - 4; // Margin
+                     const textPos = data.cell.getTextPos();
+                     const x = data.cell.x + (data.cell.width - dim) / 2;
+                     const y = data.cell.y + 2;
+                     
+                     doc.addImage(imageStr, 'JPEG', x, y, dim, dim);
+                 } catch (e) {
+                     // If image fails, text remains
+                 }
              }
         }
+    },
+    didParseCell: function(data) {
+       // Hide the messy base64 text if it's the image column
+       if (extraStats && data.column.index === 2 && typeof data.cell.raw === 'string' && data.cell.raw.startsWith('data:image')) {
+           data.cell.text = []; // Clear text
+       }
     }
   });
-
-  // --- Chart ---
-  if (chartData && chartData.length > 0) {
-      // @ts-ignore
-      let finalY = doc.lastAutoTable.finalY || 150;
-      
-      // Check if we need a new page
-      if (finalY > 220) {
-          doc.addPage();
-          finalY = 30;
-      } else {
-          finalY += 15;
-      }
-      
-      drawBarChart(doc, chartData, finalY);
-  }
 
   // Footer
   const pageCount = doc.getNumberOfPages();
@@ -285,137 +222,43 @@ export const generateTotalReport = (
   payments: Payment[],
   settings: EmployeeSettings
 ) => {
-  const tableRows: any[] = [];
-  const chartDataMap: Record<string, number> = {};
+  // 1. Logic: Only consider days with generated notes/payments
+  // Filter relevant payments (sort by date)
+  const activePayments = payments.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
-  const startDate = new Date(settings.startDate + 'T00:00:00');
-  const today = new Date();
+  // 2. Calculations
+  const weeksWorked = activePayments.length;
+  const weeklySalary = settings.expectedAmount;
   
-  // 1. Calculate Months Worked
-  const startMonth = startDate.getFullYear() * 12 + startDate.getMonth();
-  const endMonth = today.getFullYear() * 12 + today.getMonth();
-  const monthsWorked = Math.max(1, endMonth - startMonth + (today.getDate() >= startDate.getDate() ? 1 : 0));
+  const expectedTotal = weeksWorked * weeklySalary;
+  const actualTotal = activePayments.reduce((sum, p) => sum + p.amount, 0);
   
-  // 2. Calculate Expected Total (Formula: Amount * 4 * Months) as requested
-  const expectedTotal = settings.expectedAmount * 4 * monthsWorked;
-  
-  let totalPaid = 0;
+  // Debt calculation: What I should have earned vs What I actually got
+  const debt = expectedTotal - actualTotal;
 
-  // 3. Iterate week by week to build the timeline
-  // Find first payment day
-  let iterator = new Date(startDate);
-  // Align iterator to the first expected payment day
-  while (iterator.getDay() !== settings.weeklyPaymentDay) {
-      iterator.setDate(iterator.getDate() + 1);
-  }
-
-  const timeline: {date: string, type: 'PAYMENT' | 'MISSED', amount: number, note?: string}[] = [];
-  
-  // Pre-process payments
-  payments.forEach(p => {
-      // Accumulate for chart
-      const monthKey = p.date.substring(0, 7); // YYYY-MM
-      chartDataMap[monthKey] = (chartDataMap[monthKey] || 0) + p.amount;
-      
-      totalPaid += p.amount;
-  });
-
-  // Build Chronological Timeline including Missed Weeks
-  while (iterator <= today) {
-      const weekCheckDate = new Date(iterator);
-      let foundPaymentInWeek = false;
-      
-      // Check if any payment exists in this week
-      payments.forEach(p => {
-          const pDate = new Date(p.date + 'T00:00:00');
-          if (isSameWeek(pDate, weekCheckDate)) {
-              foundPaymentInWeek = true;
-          }
-      });
-
-      if (!foundPaymentInWeek) {
-           timeline.push({
-               date: toISODate(weekCheckDate),
-               type: 'MISSED',
-               amount: 0,
-               note: 'Semana sin registro'
-           });
-      }
-
-      iterator.setDate(iterator.getDate() + 7);
-  }
-
-  // Add Actual Payments to timeline
-  payments.forEach(p => {
-      if (p.date >= settings.startDate) {
-          timeline.push({
-              date: p.date,
-              type: 'PAYMENT',
-              amount: p.amount,
-              note: p.note
-          });
-      }
-  });
-
-  // Sort Timeline
-  timeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-  // --- Grouping Logic for Table ---
-  let lastMonth = "";
-
-  timeline.forEach(item => {
-      const itemDate = new Date(item.date + 'T00:00:00');
-      const monthLabel = getMonthName(itemDate).toUpperCase() + ' ' + itemDate.getFullYear();
-      const weekNum = getWeekNumber(itemDate);
-
-      // Add Section Header if month changes
-      if (monthLabel !== lastMonth) {
-          tableRows.push([{ content: monthLabel, colSpan: 5, styles: { halign: 'left' } }]);
-          lastMonth = monthLabel;
-      }
-
-      // Add Data Row
-      if (item.type === 'PAYMENT') {
-          tableRows.push([
-              item.date,
-              `Sem ${weekNum}`,
-              item.note || 'Pago recibido',
-              'Pagado',
-              `$${item.amount.toLocaleString()}`
-          ]);
-      } else {
-          tableRows.push([
-              item.date,
-              `Sem ${weekNum}`,
-              item.note,
-              'FALTA DE PAGO',
-              '$0.00'
-          ]);
-      }
+  // 3. Build Rows
+  const tableRows: any[] = activePayments.map(p => {
+      return [
+          p.date,
+          p.note || 'Sin detalles',
+          p.receiptImage || 'Sin Ticket', // Pass image data here
+          `$${p.amount.toLocaleString()}`
+      ];
   });
 
   // Add Final Total Row
-  tableRows.push([{ content: 'TOTAL ACUMULADO', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: `$${totalPaid.toLocaleString()}`, styles: { fontStyle: 'bold' } }]);
-
-  // Prepare Chart Data (Sorted Keys)
-  const chartData = Object.keys(chartDataMap).sort().map(key => {
-      const [y, m] = key.split('-');
-      const dateObj = new Date(parseInt(y), parseInt(m)-1, 1);
-      const label = new Intl.DateTimeFormat('es-ES', { month: 'short', year: '2-digit' }).format(dateObj);
-      return {
-          label: label,
-          value: chartDataMap[key]
-      };
-  });
+  tableRows.push([
+      { content: 'TOTALES', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } }, 
+      { content: `$${actualTotal.toLocaleString()}`, styles: { fontStyle: 'bold' } }
+  ]);
 
   generatePDF(
-    'Reporte Total Detallado',
-    `Periodo: ${settings.startDate} al ${toISODate(today)}`,
+    'Reporte de Sueldo y Deuda',
+    `Basado en días laborados (notas generadas)`,
     tableRows,
-    totalPaid,
+    actualTotal,
     settings,
-    `Reporte_Total_${settings.name.replace(/\s+/g, '_')}.pdf`,
-    { expectedTotal, monthsWorked },
-    chartData
+    `Reporte_Deuda_${settings.name.replace(/\s+/g, '_')}.pdf`,
+    { expectedTotal, weeksWorked, debt }
   );
 };
