@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Payment, EmployeeSettings } from '../types';
-import { getMonthName, toISODate, isSameWeek } from './dateUtils';
+import { getMonthName, toISODate, isSameWeek, getWeekNumber } from './dateUtils';
 
 // Helper to draw a simple bar chart
 const drawBarChart = (doc: jsPDF, data: { label: string, value: number }[], startY: number) => {
@@ -15,7 +15,7 @@ const drawBarChart = (doc: jsPDF, data: { label: string, value: number }[], star
     doc.setFontSize(12);
     doc.setTextColor(0);
     doc.setFont('helvetica', 'bold');
-    doc.text('Historial de Pagos por Mes', margin, startY - 5);
+    doc.text('Gráfica Mensual de Pagos Recibidos', margin, startY - 5);
     
     // Draw Axis
     doc.setDrawColor(200);
@@ -90,59 +90,80 @@ const generatePDF = (
   doc.setDrawColor(200);
   doc.line(14, 40, 196, 40);
 
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.setTextColor(0);
   doc.setFont('helvetica', 'bold');
-  doc.text('Resumen Ejecutivo', 14, 50);
+  doc.text('Información General', 14, 50);
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(80);
 
   // Column 1
-  doc.text(`Nombre:`, 14, 60);
-  doc.text(`Fecha Inicio:`, 14, 66);
-  if (extraStats) {
-      doc.text(`Meses Trabajados:`, 14, 72);
-  }
-
+  doc.text(`Nombre:`, 14, 58);
+  doc.text(`Fecha Inicio:`, 14, 64);
+  
   doc.setTextColor(0);
   doc.setFont('helvetica', 'bold');
-  doc.text(`${settings.name}`, 50, 60);
-  doc.text(`${settings.startDate}`, 50, 66);
-  if (extraStats) {
-      doc.text(`${extraStats.monthsWorked} meses`, 50, 72);
-  }
+  doc.text(`${settings.name}`, 40, 58);
+  doc.text(`${settings.startDate}`, 40, 64);
 
-  // Column 2 (Financials)
-  doc.setTextColor(80);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Total Pagado Real:`, 110, 60);
-  doc.text(`Monto Semanal:`, 110, 66);
+  // --- Financial Balance Section (New) ---
   if (extraStats) {
-      doc.text(`Total Esperado (Mes x 4):`, 110, 72);
-  }
+      const balance = total - extraStats.expectedTotal;
+      const isNegative = balance < 0;
 
-  doc.setTextColor(0);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`$${total.toLocaleString()}`, 160, 60);
-  doc.text(`$${settings.expectedAmount.toLocaleString()}`, 160, 66);
-  if (extraStats) {
-      doc.text(`$${extraStats.expectedTotal.toLocaleString()}`, 160, 72);
+      // Box background
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(100, 45, 96, 35, 2, 2, 'F');
+      
+      doc.setFontSize(11);
+      doc.setTextColor(0);
+      doc.text('Balance Financiero Total', 105, 53);
+
+      doc.setFontSize(9);
+      doc.setTextColor(80);
+      
+      // Line 1: Expected
+      doc.text('Debería ser (Meses trabajados):', 105, 60);
+      doc.text(`$${extraStats.expectedTotal.toLocaleString()}`, 190, 60, { align: 'right' });
+      
+      // Line 2: Actual
+      doc.text('Total Recibido (Suma real):', 105, 66);
+      doc.text(`$${total.toLocaleString()}`, 190, 66, { align: 'right' });
+
+      // Line 3: Balance
+      doc.setDrawColor(200);
+      doc.line(105, 70, 190, 70);
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Diferencia / Balance:', 105, 76);
+      
+      doc.setTextColor(isNegative ? 220 : 0, isNegative ? 20 : 150, isNegative ? 60 : 0); // Red if negative, Greenish if positive
+      doc.text(`$${balance.toLocaleString()}`, 190, 76, { align: 'right' });
+      
+      // Reset color
+      doc.setTextColor(0);
+  } else {
+      // Fallback for monthly report simple summary
+      doc.text(`Total Pagado:`, 140, 58);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`$${total.toLocaleString()}`, 170, 58);
   }
 
   // --- Table ---
-  const tableColumn = ["Fecha", "Semana / Notas", "Estado", "Monto"];
+  // Table Columns
+  // If extraStats exists (Total Report), use detailed columns
+  const tableColumn = extraStats 
+      ? ["Fecha", "Semana", "Detalle / Nota", "Estado", "Monto"]
+      : ["Fecha", "Detalle / Nota", "Estado", "Monto"];
   
-  if (rows.length === 0) {
-    rows.push(['-', 'No hay registros', '-', '$0.00']);
-  } else {
-    // Add Total Row
-    rows.push(['', 'TOTAL ACUMULADO', '', `$${total.toLocaleString()}`]);
-  }
+  // Start position logic
+  const tableStartY = extraStats ? 90 : 75;
 
   autoTable(doc, {
-    startY: 85,
+    startY: tableStartY,
     head: [tableColumn],
     body: rows,
     theme: 'grid',
@@ -153,24 +174,40 @@ const generatePDF = (
     },
     styles: {
       fontSize: 9,
-      cellPadding: 2
+      cellPadding: 3,
+      valign: 'middle'
     },
-    columnStyles: {
+    columnStyles: extraStats ? {
+      0: { cellWidth: 25 }, // Fecha
+      1: { cellWidth: 20, halign: 'center' }, // Semana
+      2: { cellWidth: 'auto' }, // Nota
+      3: { cellWidth: 30, halign: 'center' }, // Estado
+      4: { cellWidth: 30, halign: 'right' } // Monto
+    } : {
       0: { cellWidth: 30 },
       1: { cellWidth: 'auto' },
       2: { cellWidth: 35 },
       3: { cellWidth: 35, halign: 'right' }
     },
     didParseCell: function(data) {
-        // Style "FALTA DE PAGO" rows
-        if (data.row.raw[2] === 'FALTA DE PAGO') {
-             data.cell.styles.textColor = [193, 39, 45];
+        // Headers grouping style
+        if (data.row.raw.length === 1 && (data.row.raw[0] as any).colSpan) {
+             data.cell.styles.fillColor = [241, 245, 249]; // Slate 100
+             data.cell.styles.textColor = [71, 85, 105]; // Slate 600
              data.cell.styles.fontStyle = 'bold';
+             data.cell.styles.halign = 'left';
         }
-        // Style Total Row
-        if (rows.length > 0 && data.row.index === rows.length - 1) {
-            data.cell.styles.fontStyle = 'bold';
-            data.cell.styles.fillColor = [240, 240, 240];
+        // Style "FALTA DE PAGO" rows
+        else if (data.row.raw[data.row.raw.length - 2] === 'FALTA DE PAGO') {
+             data.cell.styles.textColor = [193, 39, 45];
+             // data.cell.styles.fillColor = [254, 242, 242]; // Light Red bg
+        }
+        // Style "Pagado" state text
+        else if (data.row.raw[data.row.raw.length - 2] === 'Pagado') {
+             if (data.column.index === data.row.raw.length - 2) { // The 'Estado' column
+                 data.cell.styles.textColor = [22, 163, 74]; // Green
+                 data.cell.styles.fontStyle = 'bold';
+             }
         }
     }
   });
@@ -183,7 +220,7 @@ const generatePDF = (
       // Check if we need a new page
       if (finalY > 220) {
           doc.addPage();
-          finalY = 20;
+          finalY = 30;
       } else {
           finalY += 15;
       }
@@ -227,6 +264,13 @@ export const generateMonthlyReport = (
     `$${payment.amount.toLocaleString()}`
   ]);
 
+  // Add Total Row
+  if (tableRows.length > 0) {
+      tableRows.push(['', 'TOTAL MES', '', `$${totalPaid.toLocaleString()}`]);
+  } else {
+      tableRows.push(['-', 'Sin movimientos este mes', '-', '$0.00']);
+  }
+
   generatePDF(
     'Reporte Mensual',
     `Periodo: ${monthName} ${year}`,
@@ -252,7 +296,7 @@ export const generateTotalReport = (
   const endMonth = today.getFullYear() * 12 + today.getMonth();
   const monthsWorked = Math.max(1, endMonth - startMonth + (today.getDate() >= startDate.getDate() ? 1 : 0));
   
-  // 2. Calculate Expected Total (Formula: Amount * 4 * Months)
+  // 2. Calculate Expected Total (Formula: Amount * 4 * Months) as requested
   const expectedTotal = settings.expectedAmount * 4 * monthsWorked;
   
   let totalPaid = 0;
@@ -260,24 +304,18 @@ export const generateTotalReport = (
   // 3. Iterate week by week to build the timeline
   // Find first payment day
   let iterator = new Date(startDate);
-  // Align iterator to the first expected payment day (e.g., first Friday after start date)
+  // Align iterator to the first expected payment day
   while (iterator.getDay() !== settings.weeklyPaymentDay) {
       iterator.setDate(iterator.getDate() + 1);
   }
 
-  // If the aligned start date is past today, we probably started recently or in future, handle grace
   const timeline: {date: string, type: 'PAYMENT' | 'MISSED', amount: number, note?: string}[] = [];
   
-  // Map payments for quick access
-  const paymentMap = new Map<string, Payment[]>(); // Key: YYYY-MM-DD
+  // Pre-process payments
   payments.forEach(p => {
       // Accumulate for chart
       const monthKey = p.date.substring(0, 7); // YYYY-MM
       chartDataMap[monthKey] = (chartDataMap[monthKey] || 0) + p.amount;
-      
-      // Store in map
-      if (!paymentMap.has(p.date)) paymentMap.set(p.date, []);
-      paymentMap.get(p.date)?.push(p);
       
       totalPaid += p.amount;
   });
@@ -287,7 +325,7 @@ export const generateTotalReport = (
       const weekCheckDate = new Date(iterator);
       let foundPaymentInWeek = false;
       
-      // Check if any payment exists in this week (Mon-Sun flexible)
+      // Check if any payment exists in this week
       payments.forEach(p => {
           const pDate = new Date(p.date + 'T00:00:00');
           if (isSameWeek(pDate, weekCheckDate)) {
@@ -295,17 +333,13 @@ export const generateTotalReport = (
           }
       });
 
-      // If NO payment in this week, mark as missed
       if (!foundPaymentInWeek) {
            timeline.push({
                date: toISODate(weekCheckDate),
                type: 'MISSED',
                amount: 0,
-               note: 'Semana sin registro de pago'
+               note: 'Semana sin registro'
            });
-      } else {
-          // If there IS a payment, we don't push it here yet because we want exact dates.
-          // We will merge actual payments and missed dates next.
       }
 
       iterator.setDate(iterator.getDate() + 7);
@@ -326,11 +360,25 @@ export const generateTotalReport = (
   // Sort Timeline
   timeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  // Generate Table Rows
+  // --- Grouping Logic for Table ---
+  let lastMonth = "";
+
   timeline.forEach(item => {
+      const itemDate = new Date(item.date + 'T00:00:00');
+      const monthLabel = getMonthName(itemDate).toUpperCase() + ' ' + itemDate.getFullYear();
+      const weekNum = getWeekNumber(itemDate);
+
+      // Add Section Header if month changes
+      if (monthLabel !== lastMonth) {
+          tableRows.push([{ content: monthLabel, colSpan: 5, styles: { halign: 'left' } }]);
+          lastMonth = monthLabel;
+      }
+
+      // Add Data Row
       if (item.type === 'PAYMENT') {
           tableRows.push([
               item.date,
+              `Sem ${weekNum}`,
               item.note || 'Pago recibido',
               'Pagado',
               `$${item.amount.toLocaleString()}`
@@ -338,12 +386,16 @@ export const generateTotalReport = (
       } else {
           tableRows.push([
               item.date,
+              `Sem ${weekNum}`,
               item.note,
               'FALTA DE PAGO',
               '$0.00'
           ]);
       }
   });
+
+  // Add Final Total Row
+  tableRows.push([{ content: 'TOTAL ACUMULADO', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: `$${totalPaid.toLocaleString()}`, styles: { fontStyle: 'bold' } }]);
 
   // Prepare Chart Data (Sorted Keys)
   const chartData = Object.keys(chartDataMap).sort().map(key => {
