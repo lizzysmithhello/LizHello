@@ -247,18 +247,34 @@ export const generateTotalReport = (
 ) => {
   // 1. Calculate time logic
   const startDate = new Date(settings.startDate + 'T00:00:00');
-  const today = new Date();
   
-  // Calculate total weeks elapsed since start date
+  // Determine Cutoff Date (EndDate or Today)
+  let cutoffDate = new Date(); // Default to today
+  if (settings.endDate) {
+      cutoffDate = new Date(settings.endDate + 'T00:00:00');
+  } else {
+      cutoffDate = new Date();
+      // Ensure we treat "today" as end of day for comparison or start of day? 
+      // Comparison usually strictly date based strings, but for time diff let's be consistent.
+      cutoffDate.setHours(0,0,0,0);
+  }
+
+  // Calculate total weeks elapsed since start date strictly within range
+  // Using 7 day intervals
   const oneWeekMs = 1000 * 60 * 60 * 24 * 7;
-  const timeDiff = today.getTime() - startDate.getTime();
+  const timeDiff = cutoffDate.getTime() - startDate.getTime();
   const weeksElapsed = Math.floor(timeDiff / oneWeekMs);
 
   // 2. Process Actual Payments (No fillers)
-  // Sort payments chronologically
-  const sortedPayments = [...payments].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  // Sort payments chronologically AND Filter by End Date
+  const filteredPayments = payments
+    .filter(p => {
+        const pDate = new Date(p.date + 'T00:00:00');
+        return pDate <= cutoffDate;
+    })
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
-  const tableRows: any[] = sortedPayments.map(p => [
+  const tableRows: any[] = filteredPayments.map(p => [
       p.date,
       p.note || 'Pago de semana', // Usa la nota como referencia de la semana pagada
       p.receiptImage || '', 
@@ -266,11 +282,11 @@ export const generateTotalReport = (
   ]);
 
   // 3. Financial Calculations
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-  const paymentsCount = payments.length; // 1 payment = 1 week logic
+  const totalPaid = filteredPayments.reduce((sum, p) => sum + p.amount, 0);
+  const paymentsCount = filteredPayments.length; // 1 payment = 1 week logic
   
   // Financial Debt Calculation
-  // Expected amount is based on calendar time passed
+  // Expected amount is based on calendar time passed within the specific range
   const expectedTotal = weeksElapsed * settings.expectedAmount;
   const debt = expectedTotal - totalPaid;
 
@@ -280,9 +296,13 @@ export const generateTotalReport = (
       { content: `$${totalPaid.toLocaleString()}`, styles: { fontStyle: 'bold' } }
   ]);
 
+  const rangeText = settings.endDate 
+    ? `Rango: ${settings.startDate} al ${settings.endDate}`
+    : `Historial Completo (Inicio: ${toISODate(startDate)})`;
+
   generatePDF(
     'Reporte de Sueldo y Deuda',
-    `Historial Completo (Inicio: ${toISODate(startDate)})`,
+    rangeText,
     tableRows,
     totalPaid,
     settings,

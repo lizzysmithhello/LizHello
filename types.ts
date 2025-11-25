@@ -11,6 +11,7 @@ export interface EmployeeSettings {
   weeklyPaymentDay: number; // 0 = Sunday, 1 = Monday, etc.
   expectedAmount: number;
   startDate: string; // ISO YYYY-MM-DD
+  endDate?: string; // ISO YYYY-MM-DD (Optional close date)
 }
 
 export interface Alert {

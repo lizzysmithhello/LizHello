@@ -117,20 +117,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
              </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Fecha de Inicio de Pagos</label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-3 text-slate-400" size={16} />
-              <input
-                type="date"
-                required
-                value={formData.startDate}
-                onChange={(e) => setFormData({...formData, startDate: e.target.value})}
-                className="pl-9 w-full rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-750 text-slate-700 dark:text-white border focus:border-[#C1272D] focus:ring-1 focus:ring-[#C1272D] p-2.5 transition-colors"
-              />
-              <p className="text-xs text-slate-400 mt-1">Los días anteriores a esta fecha no generarán alertas.</p>
+          {/* Date Range Section */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Fecha Inicio</label>
+                <div className="relative">
+                <Calendar className="absolute left-3 top-3 text-slate-400" size={16} />
+                <input
+                    type="date"
+                    required
+                    value={formData.startDate}
+                    onChange={(e) => setFormData({...formData, startDate: e.target.value})}
+                    className="pl-9 w-full rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-750 text-slate-700 dark:text-white border focus:border-[#C1272D] focus:ring-1 focus:ring-[#C1272D] p-2.5 transition-colors"
+                />
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Fecha Final <span className="text-[10px] text-slate-400">(Opcional)</span></label>
+                <div className="relative">
+                <Calendar className="absolute left-3 top-3 text-slate-400" size={16} />
+                <input
+                    type="date"
+                    value={formData.endDate || ''}
+                    onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+                    className="pl-9 w-full rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-750 text-slate-700 dark:text-white border focus:border-[#C1272D] focus:ring-1 focus:ring-[#C1272D] p-2.5 transition-colors"
+                    placeholder="Abierto"
+                />
+                </div>
             </div>
           </div>
+          <p className="text-xs text-slate-400 -mt-2">Define el rango del periodo laboral. Dejar la fecha final vacía mantendrá el conteo hasta hoy.</p>
 
           <div className="pt-2">
             <button
