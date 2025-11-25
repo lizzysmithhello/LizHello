@@ -11,7 +11,7 @@ const generatePDF = (
   total: number,
   settings: EmployeeSettings,
   fileName: string,
-  extraStats?: { expectedTotal: number, weeksWorked: number, debt: number },
+  extraStats?: { expectedTotal: number, weeksElapsed: number, paymentsCount: number, debt: number },
   globalDebt?: number
 ) => {
   const doc = new jsPDF();
@@ -57,49 +57,59 @@ const generatePDF = (
 
   // --- Financial Balance Section (Total Report) ---
   if (extraStats) {
-      const { expectedTotal, weeksWorked, debt } = extraStats;
+      const { expectedTotal, weeksElapsed, paymentsCount, debt } = extraStats;
       const isNegative = debt > 0; // Debt means they paid LESS than expected
+      const missingWeeks = Math.max(0, weeksElapsed - paymentsCount);
 
       // Box background
       doc.setFillColor(248, 250, 252);
-      doc.roundedRect(100, 45, 96, 45, 2, 2, 'F');
+      doc.roundedRect(100, 45, 96, 52, 2, 2, 'F');
       
       doc.setFontSize(11);
       doc.setTextColor(0);
-      doc.text('Resumen de Sueldos y Deuda', 105, 53);
+      doc.text('Balance General', 105, 53);
 
       doc.setFontSize(9);
       doc.setTextColor(80);
       doc.setFont('helvetica', 'normal');
       
-      // Line 1: Weeks Worked (based on calendar weeks)
-      doc.text('Semanas Laboradas (Calendario):', 105, 60);
-      doc.text(`${weeksWorked}`, 190, 60, { align: 'right' });
+      // Stats Logic
+      doc.text('Semanas Transcurridas:', 105, 60);
+      doc.text(`${weeksElapsed}`, 190, 60, { align: 'right' });
 
-      // Line 2: Expected Amount
-      doc.text(`Monto Esperado (${weeksWorked} x $${settings.expectedAmount}):`, 105, 66);
-      doc.text(`$${expectedTotal.toLocaleString()}`, 190, 66, { align: 'right' });
+      doc.text('Pagos Realizados (Semanas cubiertas):', 105, 65);
+      doc.setTextColor(0, 100, 0); // Dark Green
+      doc.text(`${paymentsCount}`, 190, 65, { align: 'right' });
+      doc.setTextColor(80);
+
+      doc.text('Semanas Pendientes (Estimado):', 105, 70);
+      if (missingWeeks > 0) doc.setTextColor(193, 39, 45); // Red if missing
+      doc.text(`${missingWeeks}`, 190, 70, { align: 'right' });
+      doc.setTextColor(80);
+
+      // Financials
+      doc.text(`Monto Ideal (${weeksElapsed} x $${settings.expectedAmount}):`, 105, 76);
+      doc.text(`$${expectedTotal.toLocaleString()}`, 190, 76, { align: 'right' });
       
-      // Line 3: Actual Amount
-      doc.text('Total Pagado Real:', 105, 72);
-      doc.text(`$${total.toLocaleString()}`, 190, 72, { align: 'right' });
+      doc.text('Monto Real Pagado:', 105, 81);
+      doc.text(`$${total.toLocaleString()}`, 190, 81, { align: 'right' });
 
-      // Line 4: Balance / Debt
+      // Line Separator
       doc.setDrawColor(200);
-      doc.line(105, 76, 190, 76);
+      doc.line(105, 84, 190, 84);
       
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
-      doc.text('DEUDA ACUMULADA:', 105, 82);
+      doc.text('DEUDA ACUMULADA:', 105, 90);
       
-      // If Debt > 0, it's bad (Red). If Debt <= 0, it's good (Green or Black)
+      // Debt Color
       doc.setTextColor(isNegative ? 193 : 22, isNegative ? 39 : 163, isNegative ? 45 : 74); 
-      doc.text(`$${debt.toLocaleString()}`, 190, 82, { align: 'right' });
+      doc.text(`$${debt.toLocaleString()}`, 190, 90, { align: 'right' });
       
       // Reset color
       doc.setTextColor(0);
   } else if (globalDebt !== undefined) {
-      // --- Monthly Report Balance Section (Added as per request) ---
+      // --- Monthly Report Balance Section ---
       // Box background
       doc.setFillColor(248, 250, 252);
       doc.roundedRect(100, 45, 96, 20, 2, 2, 'F');
@@ -118,12 +128,11 @@ const generatePDF = (
   }
 
   // --- Table ---
-  // If extraStats exists, it's the Total Report
   const tableColumn = extraStats 
-      ? ["Semana (Lunes)", "Nota / Confirmación", "Ticket (Imagen)", "Monto"]
+      ? ["Fecha Registro", "Nota / Semana Cubierta", "Ticket", "Monto"]
       : ["Fecha", "Detalle / Nota", "Estado", "Monto"];
   
-  const tableStartY = extraStats ? 95 : 75;
+  const tableStartY = extraStats ? 102 : 75;
 
   autoTable(doc, {
     startY: tableStartY,
@@ -142,7 +151,7 @@ const generatePDF = (
       minCellHeight: 15 // Ensure space for images
     },
     columnStyles: extraStats ? {
-      0: { cellWidth: 35 }, // Semana
+      0: { cellWidth: 35 }, // Fecha
       1: { cellWidth: 'auto' }, // Nota
       2: { cellWidth: 30, halign: 'center' }, // Ticket
       3: { cellWidth: 30, halign: 'right' } // Monto
@@ -156,7 +165,6 @@ const generatePDF = (
         // Embed Image Logic
         if (extraStats && data.column.index === 2 && data.cell.raw) {
              const imageStr = data.cell.raw as string;
-             // Check if it looks like a base64 image string
              if (typeof imageStr === 'string' && imageStr.startsWith('data:image')) {
                  try {
                      const dim = data.cell.height - 4; // Margin
@@ -171,15 +179,8 @@ const generatePDF = (
         }
     },
     didParseCell: function(data) {
-       // Hide the messy base64 text if it's the image column
        if (extraStats && data.column.index === 2 && typeof data.cell.raw === 'string' && data.cell.raw.startsWith('data:image')) {
            data.cell.text = []; // Clear text
-       }
-       
-       // Highlight "FALTA DE PAGO"
-       if (extraStats && data.column.index === 1 && data.cell.raw === 'FALTA DE PAGO') {
-           data.cell.styles.textColor = [193, 39, 45]; // Red
-           data.cell.styles.fontStyle = 'bold';
        }
     }
   });
@@ -244,57 +245,33 @@ export const generateTotalReport = (
   payments: Payment[],
   settings: EmployeeSettings
 ) => {
-  // 1. Initialize logic variables
+  // 1. Calculate time logic
   const startDate = new Date(settings.startDate + 'T00:00:00');
   const today = new Date();
   
-  // Adjust startDate to the Monday of that week to start the timeline correctly
-  // (Monday = 1). If day is 0 (Sunday), go back 6 days. If 2 (Tuesday), go back 1, etc.
-  const day = startDate.getDay();
-  const diff = startDate.getDate() - day + (day === 0 ? -6 : 1);
-  const currentLoopDate = new Date(startDate);
-  currentLoopDate.setDate(diff); // Now currentLoopDate is the Monday of the start week
+  // Calculate total weeks elapsed since start date
+  const oneWeekMs = 1000 * 60 * 60 * 24 * 7;
+  const timeDiff = today.getTime() - startDate.getTime();
+  const weeksElapsed = Math.floor(timeDiff / oneWeekMs);
 
-  const tableRows: any[] = [];
-  let totalPaid = 0;
-  let weeksCount = 0;
-
-  // 2. Iterate week by week (every Monday) until today
-  while (currentLoopDate <= today) {
-      weeksCount++;
-      
-      // Find a payment that belongs to this week
-      const paymentInWeek = payments.find(p => {
-          const pDate = new Date(p.date + 'T00:00:00');
-          return isSameWeek(pDate, currentLoopDate);
-      });
-
-      if (paymentInWeek) {
-          // Confirmación de pago
-          totalPaid += paymentInWeek.amount;
-          tableRows.push([
-              paymentInWeek.date, // Show actual payment date
-              paymentInWeek.note || 'Pago confirmado',
-              paymentInWeek.receiptImage || '', 
-              `$${paymentInWeek.amount.toLocaleString()}`
-          ]);
-      } else {
-          // Falta de pago (Deuda)
-          tableRows.push([
-              toISODate(currentLoopDate), // Show Monday date
-              'FALTA DE PAGO',
-              '', // No image
-              '$0.00' // $0 amount counts towards debt
-          ]);
-      }
-
-      // Advance 7 days
-      currentLoopDate.setDate(currentLoopDate.getDate() + 7);
-  }
+  // 2. Process Actual Payments (No fillers)
+  // Sort payments chronologically
+  const sortedPayments = [...payments].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  
+  const tableRows: any[] = sortedPayments.map(p => [
+      p.date,
+      p.note || 'Pago de semana', // Usa la nota como referencia de la semana pagada
+      p.receiptImage || '', 
+      `$${p.amount.toLocaleString()}`
+  ]);
 
   // 3. Financial Calculations
-  const weeksWorked = weeksCount; // Total weeks elapsed in timeline
-  const expectedTotal = weeksWorked * settings.expectedAmount;
+  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+  const paymentsCount = payments.length; // 1 payment = 1 week logic
+  
+  // Financial Debt Calculation
+  // Expected amount is based on calendar time passed
+  const expectedTotal = weeksElapsed * settings.expectedAmount;
   const debt = expectedTotal - totalPaid;
 
   // Add Final Total Row
@@ -305,11 +282,11 @@ export const generateTotalReport = (
 
   generatePDF(
     'Reporte de Sueldo y Deuda',
-    `Historial Completo Semanal (Inicio: ${toISODate(startDate)})`,
+    `Historial Completo (Inicio: ${toISODate(startDate)})`,
     tableRows,
     totalPaid,
     settings,
     `Reporte_Total_Deuda_${settings.name.replace(/\s+/g, '_')}.pdf`,
-    { expectedTotal, weeksWorked, debt }
+    { expectedTotal, weeksElapsed, paymentsCount, debt }
   );
 };
