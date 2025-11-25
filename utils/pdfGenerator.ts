@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Payment, EmployeeSettings } from '../types';
-import { getMonthName } from './dateUtils';
+import { getMonthName, isSameWeek, toISODate } from './dateUtils';
 
 // Helper to generate common PDF structure
 const generatePDF = (
@@ -72,8 +72,8 @@ const generatePDF = (
       doc.setTextColor(80);
       doc.setFont('helvetica', 'normal');
       
-      // Line 1: Weeks Worked (based on notes)
-      doc.text('Semanas Trabajadas (Notas generadas):', 105, 60);
+      // Line 1: Weeks Worked (based on calendar weeks)
+      doc.text('Semanas Laboradas (Calendario):', 105, 60);
       doc.text(`${weeksWorked}`, 190, 60, { align: 'right' });
 
       // Line 2: Expected Amount
@@ -120,7 +120,7 @@ const generatePDF = (
   // --- Table ---
   // If extraStats exists, it's the Total Report
   const tableColumn = extraStats 
-      ? ["Fecha", "Nota / Contenido", "Ticket (Imagen)", "Monto Pagado"]
+      ? ["Semana (Lunes)", "Nota / Confirmación", "Ticket (Imagen)", "Monto"]
       : ["Fecha", "Detalle / Nota", "Estado", "Monto"];
   
   const tableStartY = extraStats ? 95 : 75;
@@ -142,10 +142,10 @@ const generatePDF = (
       minCellHeight: 15 // Ensure space for images
     },
     columnStyles: extraStats ? {
-      0: { cellWidth: 30 }, // Fecha
+      0: { cellWidth: 35 }, // Semana
       1: { cellWidth: 'auto' }, // Nota
       2: { cellWidth: 30, halign: 'center' }, // Ticket
-      3: { cellWidth: 35, halign: 'right' } // Monto
+      3: { cellWidth: 30, halign: 'right' } // Monto
     } : {
       0: { cellWidth: 30 },
       1: { cellWidth: 'auto' },
@@ -174,6 +174,12 @@ const generatePDF = (
        // Hide the messy base64 text if it's the image column
        if (extraStats && data.column.index === 2 && typeof data.cell.raw === 'string' && data.cell.raw.startsWith('data:image')) {
            data.cell.text = []; // Clear text
+       }
+       
+       // Highlight "FALTA DE PAGO"
+       if (extraStats && data.column.index === 1 && data.cell.raw === 'FALTA DE PAGO') {
+           data.cell.styles.textColor = [193, 39, 45]; // Red
+           data.cell.styles.fontStyle = 'bold';
        }
     }
   });
@@ -238,43 +244,72 @@ export const generateTotalReport = (
   payments: Payment[],
   settings: EmployeeSettings
 ) => {
-  // 1. Logic: Only consider days with generated notes/payments
-  // Filter relevant payments (sort by date)
-  const activePayments = payments.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  // 1. Initialize logic variables
+  const startDate = new Date(settings.startDate + 'T00:00:00');
+  const today = new Date();
   
-  // 2. Calculations
-  const weeksWorked = activePayments.length;
-  const weeklySalary = settings.expectedAmount;
-  
-  const expectedTotal = weeksWorked * weeklySalary;
-  const actualTotal = activePayments.reduce((sum, p) => sum + p.amount, 0);
-  
-  // Debt calculation: What I should have earned vs What I actually got
-  const debt = expectedTotal - actualTotal;
+  // Adjust startDate to the Monday of that week to start the timeline correctly
+  // (Monday = 1). If day is 0 (Sunday), go back 6 days. If 2 (Tuesday), go back 1, etc.
+  const day = startDate.getDay();
+  const diff = startDate.getDate() - day + (day === 0 ? -6 : 1);
+  const currentLoopDate = new Date(startDate);
+  currentLoopDate.setDate(diff); // Now currentLoopDate is the Monday of the start week
 
-  // 3. Build Rows
-  const tableRows: any[] = activePayments.map(p => {
-      return [
-          p.date,
-          p.note || 'Sin detalles',
-          p.receiptImage || 'Sin Ticket', // Pass image data here
-          `$${p.amount.toLocaleString()}`
-      ];
-  });
+  const tableRows: any[] = [];
+  let totalPaid = 0;
+  let weeksCount = 0;
+
+  // 2. Iterate week by week (every Monday) until today
+  while (currentLoopDate <= today) {
+      weeksCount++;
+      
+      // Find a payment that belongs to this week
+      const paymentInWeek = payments.find(p => {
+          const pDate = new Date(p.date + 'T00:00:00');
+          return isSameWeek(pDate, currentLoopDate);
+      });
+
+      if (paymentInWeek) {
+          // Confirmación de pago
+          totalPaid += paymentInWeek.amount;
+          tableRows.push([
+              paymentInWeek.date, // Show actual payment date
+              paymentInWeek.note || 'Pago confirmado',
+              paymentInWeek.receiptImage || '', 
+              `$${paymentInWeek.amount.toLocaleString()}`
+          ]);
+      } else {
+          // Falta de pago (Deuda)
+          tableRows.push([
+              toISODate(currentLoopDate), // Show Monday date
+              'FALTA DE PAGO',
+              '', // No image
+              '$0.00' // $0 amount counts towards debt
+          ]);
+      }
+
+      // Advance 7 days
+      currentLoopDate.setDate(currentLoopDate.getDate() + 7);
+  }
+
+  // 3. Financial Calculations
+  const weeksWorked = weeksCount; // Total weeks elapsed in timeline
+  const expectedTotal = weeksWorked * settings.expectedAmount;
+  const debt = expectedTotal - totalPaid;
 
   // Add Final Total Row
   tableRows.push([
       { content: 'TOTALES', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } }, 
-      { content: `$${actualTotal.toLocaleString()}`, styles: { fontStyle: 'bold' } }
+      { content: `$${totalPaid.toLocaleString()}`, styles: { fontStyle: 'bold' } }
   ]);
 
   generatePDF(
     'Reporte de Sueldo y Deuda',
-    `Basado en días laborados (notas generadas)`,
+    `Historial Completo Semanal (Inicio: ${toISODate(startDate)})`,
     tableRows,
-    actualTotal,
+    totalPaid,
     settings,
-    `Reporte_Deuda_${settings.name.replace(/\s+/g, '_')}.pdf`,
+    `Reporte_Total_Deuda_${settings.name.replace(/\s+/g, '_')}.pdf`,
     { expectedTotal, weeksWorked, debt }
   );
 };
