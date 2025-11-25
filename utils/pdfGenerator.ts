@@ -11,7 +11,8 @@ const generatePDF = (
   total: number,
   settings: EmployeeSettings,
   fileName: string,
-  extraStats?: { expectedTotal: number, weeksWorked: number, debt: number }
+  extraStats?: { expectedTotal: number, weeksWorked: number, debt: number },
+  globalDebt?: number
 ) => {
   const doc = new jsPDF();
   
@@ -54,7 +55,7 @@ const generatePDF = (
   doc.setFont('helvetica', 'bold');
   doc.text(`${settings.name}`, 40, 58);
 
-  // --- Financial Balance Section (Specific Request) ---
+  // --- Financial Balance Section (Total Report) ---
   if (extraStats) {
       const { expectedTotal, weeksWorked, debt } = extraStats;
       const isNegative = debt > 0; // Debt means they paid LESS than expected
@@ -96,6 +97,23 @@ const generatePDF = (
       doc.text(`$${debt.toLocaleString()}`, 190, 82, { align: 'right' });
       
       // Reset color
+      doc.setTextColor(0);
+  } else if (globalDebt !== undefined) {
+      // --- Monthly Report Balance Section (Added as per request) ---
+      // Box background
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(100, 45, 96, 20, 2, 2, 'F');
+      
+      doc.setFontSize(10);
+      doc.setTextColor(0);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Estado de Cuenta Global (Al día de hoy)', 105, 53);
+
+      doc.setFontSize(10);
+      const isNegative = globalDebt > 0;
+      doc.setTextColor(isNegative ? 193 : 22, isNegative ? 39 : 163, isNegative ? 45 : 74); 
+      doc.text(`Deuda Acumulada: $${globalDebt.toLocaleString()}`, 190, 58, { align: 'right' });
+      
       doc.setTextColor(0);
   }
 
@@ -141,12 +159,7 @@ const generatePDF = (
              // Check if it looks like a base64 image string
              if (typeof imageStr === 'string' && imageStr.startsWith('data:image')) {
                  try {
-                     // Clear the text "Ver Ticket" so we draw the image instead
-                     // (Though autotable draws text before hook, we can draw over it or just ignore if we pass image as data)
-                     // Actually, better to pass the base64 string as cell data, and here we draw the image.
-                     
                      const dim = data.cell.height - 4; // Margin
-                     const textPos = data.cell.getTextPos();
                      const x = data.cell.x + (data.cell.width - dim) / 2;
                      const y = data.cell.y + 2;
                      
@@ -181,7 +194,8 @@ const generatePDF = (
 export const generateMonthlyReport = (
   currentDate: Date,
   payments: Payment[],
-  settings: EmployeeSettings
+  settings: EmployeeSettings,
+  currentDebt: number
 ) => {
   const monthName = getMonthName(currentDate);
   const year = currentDate.getFullYear();
@@ -214,7 +228,9 @@ export const generateMonthlyReport = (
     tableRows,
     totalPaid,
     settings,
-    `Reporte_Mensual_${settings.name.replace(/\s+/g, '_')}_${monthName}_${year}.pdf`
+    `Reporte_Mensual_${settings.name.replace(/\s+/g, '_')}_${monthName}_${year}.pdf`,
+    undefined,
+    currentDebt
   );
 };
 

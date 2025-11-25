@@ -219,16 +219,7 @@ const App: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleDownloadMonthlyPDF = () => {
-      generateMonthlyReport(currentDate, payments, settings);
-  };
-
-  const handleDownloadTotalPDF = () => {
-      generateTotalReport(payments, settings);
-  };
-
-  // Calculate missed payments
-  // Updated Logic: Check by WEEK, not just by exact day.
+  // Calculate missed payments (Required for debt calculation)
   const missedDates = useMemo(() => {
     const missed: string[] = [];
     
@@ -247,7 +238,6 @@ const App: React.FC = () => {
         const expectedDate = new Date(iterator);
         
         // Check if ANY payment exists within the same week as the expected date
-        // This allows paying on Thursday for a Friday deadline without flagging as missed
         const hasPaymentInWeek = payments.some(p => {
              const paymentDate = new Date(p.date + 'T00:00:00');
              return isSameWeek(paymentDate, expectedDate);
@@ -264,6 +254,15 @@ const App: React.FC = () => {
     return missed;
   }, [payments, settings.weeklyPaymentDay, settings.startDate]);
 
+  const handleDownloadMonthlyPDF = () => {
+      // Calculate total current debt based on missed weeks logic (same as Dashboard)
+      const currentDebt = missedDates.length * settings.expectedAmount;
+      generateMonthlyReport(currentDate, payments, settings, currentDebt);
+  };
+
+  const handleDownloadTotalPDF = () => {
+      generateTotalReport(payments, settings);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pb-12 transition-colors duration-300">
