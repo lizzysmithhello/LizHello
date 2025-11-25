@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Loader2, Camera, Calendar as CalendarIcon, DollarSign, FileText, Trash2, SwitchCamera, RefreshCw } from 'lucide-react';
+import { X, Upload, Loader2, Camera, Calendar as CalendarIcon, DollarSign, FileText, Trash2, SwitchCamera, RefreshCw, ZoomIn } from 'lucide-react';
 import { extractTicketData } from '../services/geminiService';
 import { Payment } from '../types';
 
@@ -24,6 +24,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, sel
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Zoom State
+  const [zoom, setZoom] = useState({ x: 0, y: 0, isZoomed: false });
+
   useEffect(() => {
     if (isOpen) {
       if (existingPayment) {
@@ -38,6 +41,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, sel
         setImage(null);
       }
       setIsCameraOpen(false); // Reset camera state on open
+      setZoom({ x: 0, y: 0, isZoomed: false });
     }
   }, [isOpen, selectedDate, existingPayment]);
 
@@ -149,6 +153,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, sel
       setImage(null);
   };
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - left) / width) * 100;
+    const y = ((e.clientY - top) / height) * 100;
+    setZoom({ x, y, isZoomed: true });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in transition-colors duration-300 flex flex-col max-h-[90vh]">
@@ -170,8 +181,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, sel
               
               <div 
                 className={`
-                  border-2 border-dashed rounded-xl overflow-hidden relative transition-colors h-48 sm:h-52 flex flex-col items-center justify-center group
-                  ${isCameraOpen ? 'border-transparent bg-black' : 'border-slate-300 dark:border-slate-600 hover:border-[#C1272D] hover:bg-slate-50 dark:hover:bg-slate-750'}
+                  border-2 border-dashed rounded-xl overflow-hidden relative transition-colors h-48 sm:h-52 flex flex-col items-center justify-center group bg-slate-50 dark:bg-slate-900
+                  ${isCameraOpen ? 'border-transparent bg-black' : 'border-slate-300 dark:border-slate-600 hover:border-[#C1272D]'}
                 `}
               >
                 {/* 1. Camera View */}
@@ -206,26 +217,50 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, sel
                   // 2. Image Preview or Selection UI
                   <>
                     {image ? (
-                      <div className="relative w-full h-full">
-                        <img src={image} alt="Ticket Preview" className="w-full h-full object-contain bg-slate-100 dark:bg-slate-900" />
+                      <div className="relative w-full h-full group">
+                        {/* Zoomable Image Container */}
+                        <div 
+                          className="w-full h-full overflow-hidden relative cursor-crosshair"
+                          onMouseMove={handleMouseMove}
+                          onMouseLeave={() => setZoom({ ...zoom, isZoomed: false })}
+                        >
+                          <img 
+                            src={image} 
+                            alt="Ticket Preview" 
+                            className="w-full h-full object-contain transition-transform duration-100 ease-out will-change-transform"
+                            style={{
+                                transform: zoom.isZoomed ? 'scale(2.5)' : 'scale(1)',
+                                transformOrigin: `${zoom.x}% ${zoom.y}%`
+                            }}
+                          />
+                        </div>
                         
                         {isProcessing && (
-                          <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center backdrop-blur-[2px]">
+                          <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center backdrop-blur-[2px] z-10">
                              <Loader2 className="animate-spin text-white mb-2" size={32} />
                              <span className="text-white font-medium text-sm text-shadow">Analizando ticket...</span>
                           </div>
                         )}
 
+                        {/* Remove Button (High Z-Index) */}
                         <button 
                           type="button"
                           onClick={handleRemoveImage}
-                          className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full hover:bg-red-500 transition-colors"
+                          className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full hover:bg-red-500 transition-colors z-20"
                         >
                           <X size={16} />
                         </button>
                         
+                        {/* Hint for Zoom */}
+                        {!isProcessing && !zoom.isZoomed && (
+                           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 text-white px-3 py-1.5 rounded-full flex items-center gap-2 text-xs backdrop-blur-sm z-10">
+                              <ZoomIn size={14} />
+                              <span>Pasa el mouse para hacer zoom</span>
+                           </div>
+                        )}
+                        
                         {!isProcessing && (
-                             <div className="absolute bottom-2 left-0 right-0 text-center">
+                             <div className="absolute bottom-2 left-0 right-0 text-center pointer-events-none z-10">
                                 <p className="text-xs text-white/90 bg-black/40 inline-block px-2 py-1 rounded-md">Ticket adjunto</p>
                              </div>
                         )}
