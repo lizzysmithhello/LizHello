@@ -1,0 +1,5 @@
+{
+  "name": "PagoTrack - Registro de Pagos",
+  "description": "Una aplicación para gestionar y registrar pagos semanales a empleados, con escaneo de tickets mediante IA, alertas de falta de pago y resúmenes mensuales.",
+  "requestFramePermissions": []
+}
