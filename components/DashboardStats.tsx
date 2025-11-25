@@ -35,6 +35,9 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ currentDate, pay
   // Avoid division by zero
   const progress = expectedTotal > 0 ? Math.min((totalPaid / expectedTotal) * 100, 100) : (totalPaid > 0 ? 100 : 0);
 
+  // Total Pending Amount
+  const totalPendingAmount = missedDates.length * settings.expectedAmount;
+
   // Prepare Chart Data (Group by Week)
   // Simplified: Last 4 months comparison
   const getMonthData = (offset: number) => {
@@ -63,13 +66,19 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ currentDate, pay
         {missedDates.length > 0 && (
             <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm animate-pulse-slow">
                 <div className="flex items-start">
-                    <AlertTriangle className="text-red-500 mt-0.5 mr-3 flex-shrink-0" size={20} />
-                    <div>
-                        <h4 className="text-red-800 dark:text-red-300 font-bold">Atención: Pagos Pendientes</h4>
+                    <AlertTriangle className="text-red-500 mt-0.5 mr-3 flex-shrink-0" size={24} />
+                    <div className="flex-1">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                             <h4 className="text-red-800 dark:text-red-300 font-bold text-lg">
+                                Atención: Pagos Pendientes
+                             </h4>
+                             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100 border border-red-200 dark:border-red-700">
+                                Total Deuda: ${totalPendingAmount.toLocaleString()}
+                             </span>
+                        </div>
                         <p className="text-red-700 dark:text-red-400 text-sm mt-1">
-                            Se detectaron {missedDates.length} días de pago omitidos este mes.
+                            Se detectaron {missedDates.length} semanas de pago omitidas desde el inicio.
                             <br />
-                            <span className="text-xs opacity-75">Fechas: {missedDates.join(', ')}</span>
                         </p>
                     </div>
                 </div>

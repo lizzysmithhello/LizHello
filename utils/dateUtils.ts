@@ -44,3 +44,21 @@ export const getWeekNumber = (date: Date): number => {
   const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
   return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
 };
+
+export const isSameWeek = (date1: Date, date2: Date): boolean => {
+  // Adjust to start of week (Monday) to compare
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  
+  // Make Monday (1) the first day. 0 is Sunday.
+  const day1 = d1.getDay() || 7;
+  const day2 = d2.getDay() || 7;
+  
+  d1.setHours(0, 0, 0, 0);
+  if (day1 !== 1) d1.setHours(-24 * (day1 - 1));
+  
+  d2.setHours(0, 0, 0, 0);
+  if (day2 !== 1) d2.setHours(-24 * (day2 - 1));
+  
+  return d1.getTime() === d2.getTime();
+};

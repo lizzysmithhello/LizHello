@@ -4,9 +4,9 @@ import { PaymentModal } from './components/PaymentModal';
 import { DashboardStats } from './components/DashboardStats';
 import { SettingsModal } from './components/SettingsModal';
 import { Payment, EmployeeSettings } from './types';
-import { getMonthName, toISODate } from './utils/dateUtils';
-import { generateMonthlyReport } from './utils/pdfGenerator';
-import { ChevronLeft, ChevronRight, Settings, User, FileDown, Moon, Sun } from 'lucide-react';
+import { getMonthName, toISODate, isSameWeek } from './utils/dateUtils';
+import { generateMonthlyReport, generateTotalReport } from './utils/pdfGenerator';
+import { ChevronLeft, ChevronRight, Settings, User, FileDown, Moon, Sun, FileText } from 'lucide-react';
 
 // Helper for safe ID generation
 const generateId = () => {
@@ -173,40 +173,50 @@ const App: React.FC = () => {
     window.location.reload();
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadMonthlyPDF = () => {
       generateMonthlyReport(currentDate, payments, settings);
   };
 
+  const handleDownloadTotalPDF = () => {
+      generateTotalReport(payments, settings);
+  };
+
   // Calculate missed payments
+  // Updated Logic: Check by WEEK, not just by exact day.
   const missedDates = useMemo(() => {
     const missed: string[] = [];
-    const today = new Date();
-    // Start checking from beginning of current month view
-    const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0); // End of month
     
-    // Iterate days
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        // Stop if future
-        if (d > today) break;
-
-        const dateStr = toISODate(d);
-
-        // Skip if before start date
-        if (dateStr < settings.startDate) continue;
-
-        // Check if it's a payment day (e.g., Friday = 5)
-        if (d.getDay() === settings.weeklyPaymentDay) {
-            
-            // Check if payment exists on that exact date.
-            const hasPayment = payments.some(p => p.date === dateStr);
-            if (!hasPayment) {
-                missed.push(dateStr);
-            }
-        }
+    // Parse start date
+    const start = new Date(settings.startDate + 'T00:00:00'); // Ensure local time
+    const today = new Date();
+    
+    // Find the first required payment day (e.g., Friday) on or after start date
+    let iterator = new Date(start);
+    while (iterator.getDay() !== settings.weeklyPaymentDay) {
+        iterator.setDate(iterator.getDate() + 1);
     }
+
+    // Loop through every expected payment week until today
+    while (iterator <= today) {
+        const expectedDate = new Date(iterator);
+        
+        // Check if ANY payment exists within the same week as the expected date
+        // This allows paying on Thursday for a Friday deadline without flagging as missed
+        const hasPaymentInWeek = payments.some(p => {
+             const paymentDate = new Date(p.date + 'T00:00:00');
+             return isSameWeek(paymentDate, expectedDate);
+        });
+
+        if (!hasPaymentInWeek) {
+            missed.push(toISODate(expectedDate));
+        }
+
+        // Move to next week
+        iterator.setDate(iterator.getDate() + 7);
+    }
+
     return missed;
-  }, [currentDate, payments, settings.weeklyPaymentDay, settings.startDate]);
+  }, [payments, settings.weeklyPaymentDay, settings.startDate]);
 
 
   return (
@@ -278,19 +288,32 @@ const App: React.FC = () => {
 
         {/* Calendar Control */}
         <section className="space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
                 <h2 className="text-2xl font-bold text-slate-800 dark:text-white capitalize transition-colors">
                     {getMonthName(currentDate)}
                 </h2>
                 
-                <div className="flex items-center gap-3">
-                    <button 
-                        onClick={handleDownloadPDF}
-                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#C1272D] bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition-colors"
-                    >
-                        <FileDown size={18} />
-                        <span className="hidden sm:inline">Descargar Reporte</span>
-                    </button>
+                <div className="flex flex-wrap items-center gap-3">
+                    {/* Botones de Reporte */}
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={handleDownloadMonthlyPDF}
+                            className="flex items-center gap-2 px-3 py-2 text-xs md:text-sm font-medium text-[#C1272D] bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition-colors border border-red-100 dark:border-red-900/30"
+                        >
+                            <FileDown size={16} />
+                            <span>Reporte Mensual</span>
+                        </button>
+                        
+                        <button 
+                            onClick={handleDownloadTotalPDF}
+                            className="flex items-center gap-2 px-3 py-2 text-xs md:text-sm font-medium text-white bg-[#C1272D] hover:bg-red-700 rounded-lg transition-colors shadow-sm"
+                        >
+                            <FileText size={16} />
+                            <span>Reporte Total</span>
+                        </button>
+                    </div>
+
+                    <div className="h-8 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block"></div>
 
                     <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-lg p-1 shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
                         <button onClick={handlePrevMonth} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-400 transition">
